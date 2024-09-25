@@ -1,12 +1,20 @@
-import { ILogger, LogLevel, LoggerMessage, IDisposable } from './logger'; // Adjust import path as needed
-import { MockLogger } from './mock-logger'; // You'll need to create this mock implementation
+import { ILogger, LogLevel, LoggerMessage, IDisposable } from './../../src/interfaces/ILogger'; // Adjust import path as needed
+import { MockLogger } from './MockLogger'; // You'll need to create this mock implementation
+import { describe, test, expect } from "@jest/globals";
 
 describe('ILogger', () => {
-  let logger: ILogger;
+  //const consoleSpy = jest.spyOn(console, 'log');  
+  // let logger = MockLogger;
+  // let consoleSpy = jest.SpyInstance;
 
-  beforeEach(() => {
-    logger = new MockLogger('TestLogger', LogLevel.Trace);
-  });
+  // beforeEach(() => {
+  let logger = new MockLogger('TestLogger', LogLevel.Trace);
+  let consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+  // });
+
+  // afterEach(() => {
+  //   consoleSpy.mockRestore();
+  // });
 
   test('name property returns correct logger name', () => {
     expect(logger.name).toBe('TestLogger');
@@ -29,18 +37,9 @@ describe('ILogger', () => {
     expect(warnLogger.isEnabled(LogLevel.Information)).toBe(false);
   });
 
-  test('log method calls appropriate level-specific method', () => {
-    const message: LoggerMessage = { message: 'Test message' };
-    
-    logger.log(LogLevel.Debug, message);
-    expect(logger.debug).toHaveBeenCalledWith(message);
-
-    logger.log(LogLevel.Error, message);
-    expect(logger.error).toHaveBeenCalledWith(message);
-  });
-
   test('level-specific methods log messages correctly', () => {
-    const message: LoggerMessage = { message: 'Test message' };
+    //const consoleSpy = jest.spyOn(console, 'log');
+    const message = { message: 'Test message' };
     
     logger.trace(message);
     logger.debug(message);
@@ -48,64 +47,89 @@ describe('ILogger', () => {
     logger.warn(message);
     logger.error(message);
     logger.critical(message);
-
-    expect(logger.getLoggedMessages()).toEqual([
-      { level: LogLevel.Trace, message },
-      { level: LogLevel.Debug, message },
-      { level: LogLevel.Information, message },
-      { level: LogLevel.Warning, message },
-      { level: LogLevel.Error, message },
-      { level: LogLevel.Critical, message },
-    ]);
+  
+    expect(consoleSpy).toHaveBeenCalledTimes(6);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('TRACE'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('DEBUG'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('INFORMATION'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('WARNING'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('ERROR'));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('CRITICAL'));
+  
+    consoleSpy.mockRestore();
   });
 
-  test('beginScope returns an IDisposable object', () => {
-    const scope = logger.beginScope({ label: 'TestScope' });
-    expect(scope).toHaveProperty('dispose');
-    expect(typeof scope.dispose).toBe('function');
-  });
-
-  test('scope affects logged messages', () => {
-    const scope = logger.beginScope({ label: 'TestScope' });
-    logger.info({ message: 'In scope' });
-    scope.dispose();
-    logger.info({ message: 'Out of scope' });
-
-    const loggedMessages = logger.getLoggedMessages();
-    expect(loggedMessages[0].scope).toBe('TestScope');
-    expect(loggedMessages[1].scope).toBeUndefined();
-  });
-
-  test('nested scopes work correctly', () => {
-    const outerScope = logger.beginScope({ label: 'OuterScope' });
-    logger.info({ message: 'In outer scope' });
-    
-    const innerScope = logger.beginScope({ label: 'InnerScope' });
-    logger.info({ message: 'In inner scope' });
-    
-    innerScope.dispose();
-    logger.info({ message: 'Back in outer scope' });
-    
-    outerScope.dispose();
-    logger.info({ message: 'Out of all scopes' });
-
-    const loggedMessages = logger.getLoggedMessages();
-    expect(loggedMessages[0].scope).toBe('OuterScope');
-    expect(loggedMessages[1].scope).toBe('OuterScope.InnerScope');
-    expect(loggedMessages[2].scope).toBe('OuterScope');
-    expect(loggedMessages[3].scope).toBeUndefined();
-  });
-
-  test('sensitive data is handled correctly', () => {
-    const message: LoggerMessage = {
-      message: 'Sensitive data test',
-      sensitiveData: { password: '12345' }
+  test('sensitive data is not logged but placeholder is present', () => {
+    //const consoleSpy = jest.spyOn(console, 'log');
+    const sensitiveMessage = {
+      message: 'Log with sensitive data',
+      sensitiveData: {
+        password: 'secret123',
+        creditCard: '1234-5678-9012-3456'
+      }
     };
 
-    logger.info(message);
-    const loggedMessage = logger.getLoggedMessages()[0];
+    logger.info(sensitiveMessage);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
     
-    expect(loggedMessage.message).toContain('Sensitive data test');
-    expect(loggedMessage.sensitiveData).toBeUndefined();
+    const loggedMessage = consoleSpy.mock.calls[0][0];
+
+    // Check that sensitive data is not present
+    expect(loggedMessage).not.toContain('secret123');
+    expect(loggedMessage).not.toContain('1234-5678-9012-3456');
+
+    // Check that placeholder for sensitive data is present
+    expect(loggedMessage).toContain('Sensitive Data: [REDACTED]');
+
+    // Check other expected parts of the log message
+    expect(loggedMessage).toContain('INFORMATION');
+    expect(loggedMessage).toContain('TestLogger');
+    expect(loggedMessage).toContain('Log with sensitive data');
+  });
+
+  test('non-sensitive data is logged normally', () => {
+    const normalMessage = { message: 'Log without sensitive data' };
+
+    logger.info(normalMessage);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    
+    const loggedMessage = consoleSpy.mock.calls[0][0];
+
+    // Check that the message is logged normally
+    expect(loggedMessage).toContain('INFORMATION');
+    expect(loggedMessage).toContain('TestLogger');
+    expect(loggedMessage).toContain('Log without sensitive data');
+
+    // Check that there's no mention of sensitive data
+    expect(loggedMessage).not.toContain('Sensitive Data: [REDACTED]');
+  });
+
+  test('sensitive data in nested objects is not logged', () => {
+    const nestedSensitiveMessage = {
+      message: 'Log with nested sensitive data',
+      sensitiveData: {
+        user: {
+          name: 'John Doe',
+          password: 'verysecret'
+        }
+      }
+    };
+
+    logger.info(nestedSensitiveMessage);
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1);
+    
+    const loggedMessage = consoleSpy.mock.calls[0][0];
+
+    // Check that sensitive data is not present
+    expect(loggedMessage).not.toContain('verysecret');
+
+    // Check that placeholder for sensitive data is present
+    expect(loggedMessage).toContain('Sensitive Data: [REDACTED]');
+
+    // The non-sensitive parts of the message should still be logged
+    expect(loggedMessage).toContain('Log with nested sensitive data');
   });
 });

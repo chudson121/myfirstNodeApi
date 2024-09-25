@@ -5,7 +5,7 @@ export class DatabaseError extends Error {
     }
   }
   // src/services/serviceService.ts
-  import { ILogger } from '../interfaces/ILogger';
+  import { ILogger } from '../interfaces/ILogger.ts';
   import { ITracer } from '../interfaces/ITracer';
   import { Service } from '../models/serviceModel';
   import { ICRUD, IQuery } from '../interfaces/database';
